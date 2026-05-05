@@ -1,0 +1,41 @@
+# Raw data — too large for git
+data/raw/
+
+# Processed data — reproducible from notebooks
+data/processed/
+
+# Trained models
+outputs/models/
+
+# Predictions and metrics — reproducible from notebooks
+outputs/*.parquet
+outputs/*.json
+outputs/*.csv
+
+# Figures — reproducible from notebooks
+outputs/figures/
+
+# Old reports directory
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb~
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

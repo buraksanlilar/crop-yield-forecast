@@ -1,0 +1,13 @@
+pandas>=2.0
+pyarrow>=14.0
+duckdb>=0.10
+numpy>=1.26
+matplotlib>=3.8
+seaborn>=0.13
+plotly>=5.18
+scikit-learn>=1.4
+xgboost>=2.0
+lightgbm>=4.3
+jupyterlab>=4.0
+ipywidgets>=8.0
+tqdm>=4.66
