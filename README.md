@@ -34,16 +34,21 @@ crop-yield-forecast/
 │   ├── 02_feature_engineering.ipynb  # Season aggregation + feature prep
 │   ├── 03_baseline_model.ipynb       # Full-season LightGBM (R²=0.964)
 │   ├── 04_early_prediction.ipynb     # Early-season forecasting (day 30/60/90/120)
-│   └── 05_crop_recommendation.ipynb  # Best-crop recommendation per location × year
+│   ├── 05_crop_recommendation.ipynb  # Best-crop recommendation per location × year
+│   ├── 06_sim_success_classification.ipynb  # Early harvest failure prediction (AUC=0.98)
+│   └── 07_climate_change_simulation.ipynb   # +2°C warming impact on yield
 │
 ├── outputs/
 │   ├── figures/                      # All plots from all notebooks
 │   ├── models/                       # Trained LightGBM models (.joblib)
-│   ├── baseline_metrics.json         # RMSE, MAE, R² for full-season model
-│   ├── early_prediction_metrics.json # Metrics for each day-cutoff model
-│   ├── baseline_predictions.parquet  # Test set predictions (full-season)
-│   ├── crop_recommendations.parquet  # Best crop per location × year
-│   └── feature_importance.csv        # Feature importance ranking
+│   ├── baseline_metrics.json              # RMSE, MAE, R² for full-season model
+│   ├── early_prediction_metrics.json      # Metrics for each day-cutoff model
+│   ├── sim_success_metrics.json           # AUC for each day-cutoff classifier
+│   ├── climate_change_summary.json        # +2°C simulation summary
+│   ├── baseline_predictions.parquet       # Test set predictions (full-season)
+│   ├── crop_recommendations.parquet       # Best crop per location × year
+│   ├── climate_change_simulation.parquet  # Per-row yield change under +2°C
+│   └── feature_importance.csv             # Feature importance ranking
 │
 └── src/
     └── data/
@@ -85,12 +90,32 @@ Trains separate models using only the first N days of each season to simulate re
 ### 05 — Crop Recommendation
 Uses the full-season model to predict yield for all crops at each location and recommends the highest-yielding crop. Normal scenario only.
 
+### 06 — Harvest Failure Classification (Early Season)
+Predicts whether a season will result in a failed harvest using only the first N days of data — a genuine early-warning system with no data leakage.
+
+| Day cutoff | AUC |
+|---|---|
+| 30 | 0.981 |
+| 60 | 0.982 |
+| 90 | 0.983 |
+
+**Key finding:** Day 30 alone achieves AUC=0.981 — harvest failure can be detected within the first month of the season.
+
+### 07 — Climate Change Simulation
+Simulates the effect of +2°C warming on crop yields by perturbing `mean_temp` in the full-season model. Results shown per crop and spatially across Turkey.
+
+**Key findings:**
+- `chickpea` is the only crop with a negative impact (−10%)
+- `rapeseed`, `maize`, and `cotton` benefit the most (+7–8%)
+- `wheat` and `barley` are nearly unaffected (+0–1%)
+- Southern locations (lat 36) are more vulnerable — already warm regions are more sensitive to further warming
+
 ## Setup
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Run notebooks in order: `01 → 02 → 03 → 04 → 05`
+Run notebooks in order: `01 → 02 → 03 → 04 → 05 → 06 → 07`
 
-> **Note:** `02` must be run before `03–05` since it generates `train.parquet`, `test.parquet`, and `crop_te_map.json`.
+> **Note:** `02` must be run before `03–07` since it generates `train.parquet`, `test.parquet`, and `crop_te_map.json`.
