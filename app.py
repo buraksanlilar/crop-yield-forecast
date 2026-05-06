@@ -39,6 +39,11 @@ def load_models():
     }
 
 @st.cache_data
+def load_moisture_profiles():
+    with open(PROCESSED / "crop_daily_moisture_profile.json") as f:
+        return json.load(f)
+
+@st.cache_data
 def load_agg():
     import sys
     sys.path.insert(0, str(ROOT))
@@ -66,7 +71,7 @@ st.title("🌾 Crop Yield Forecast — Turkey")
 
 page = st.sidebar.radio(
     "Navigation",
-    ["Yield Prediction", "Harvest Success", "Crop Recommendation", "Climate Simulation"],
+    ["Yield Prediction", "Harvest Success", "Crop Recommendation", "Climate Simulation", "IoT Decision Engine"],
 )
 
 models    = load_models()
@@ -389,3 +394,189 @@ elif page == "Climate Simulation":
     st.subheader("Spatial impact map")
     spatial = df.groupby(["latitude", "longitude"])["yield_change_pct"].median().reset_index()
     st.map(spatial.rename(columns={"latitude": "lat", "longitude": "lon"}))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PAGE 5 — IoT Decision Engine
+# ══════════════════════════════════════════════════════════════════════════
+elif page == "IoT Decision Engine":
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+
+    st.header("IoT Decision Engine")
+    st.caption("Enter today's sensor readings → get irrigation decision + yield forecast.")
+
+    # Target encoding per crop (from training data)
+    CROP_TE = {
+        "barley": 4850.5, "cassava": 1106.6, "chickpea": 61.0, "cotton": 545.1,
+        "cowpea": 438.8, "fababean": 4096.8, "groundnut": 224.7, "maize": 2179.9,
+        "millet": 672.0, "mungbean": 523.5, "pigeonpea": 1924.9, "potato": 2367.9,
+        "rapeseed": 1539.9, "rice": 565.0, "seed_onion": 5638.9, "sorghum": 1161.9,
+        "soybean": 1069.3, "sugarbeet": 4436.6, "sunflower": 601.9,
+        "sweetpotato": 2112.3, "tobacco": 11.8, "wheat": 4900.8,
+    }
+    CROP_PRICES_IOT = {
+        "wheat": 8.5, "barley": 7.0, "maize": 9.0, "chickpea": 22.0,
+        "rapeseed": 18.0, "sunflower": 20.0, "soybean": 19.0, "cotton": 25.0,
+        "potato": 6.0, "sugarbeet": 3.5, "rice": 14.0, "tobacco": 45.0,
+    }
+    WATER_COST = 2.5  # TL/m³
+
+    moisture_profiles = load_moisture_profiles()
+    iot_m = {
+        30: models["iot_day30"],
+        60: models["iot_day60"],
+        90: models["iot_day90"],
+    }
+
+    IOT_CROPS = sorted(CROP_TE.keys())
+
+    # ── Inputs ────────────────────────────────────────────────────────────
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Tarla & Konum")
+        crop         = st.selectbox("Bitki", IOT_CROPS, index=IOT_CROPS.index("wheat"))
+        season_day   = st.slider("Sezon günü (ekim sonrası)", 1, 365, 45)
+        field_area_ha= st.number_input("Tarla alanı (hektar)", 0.1, 500.0, 1.0, 0.1)
+        root_depth   = st.slider("Kök / sulama derinliği (m)", 0.10, 0.60, 0.30, 0.05)
+        lat          = st.slider("Enlem", 36.0, 42.0, 39.0, 0.5)
+        lon          = st.slider("Boylam", 26.0, 44.0, 35.0, 0.5)
+        elev         = st.number_input("Rakım (m)", 0, 3000, 800, 50)
+        year         = st.slider("Yıl", 2014, 2030, 2024)
+
+    with col2:
+        st.subheader("IoT Sensör Okumaları")
+        current_sm    = st.slider("Mevcut toprak nemi (m³/m³)", 0.05, 0.50, 0.22, 0.01)
+        mean_temp     = st.slider("Ort. hava sıcaklığı — sezon (°C)", -5.0, 35.0, 13.0, 0.5)
+        total_precip  = st.slider("Toplam yağış — sezon (mm)", 0, 600, 95, 5)
+        mean_humidity = st.slider("Ort. hava nemi — sezon (%)", 20, 100, 65)
+        mean_soil_temp= st.slider("Ort. toprak sıcaklığı — sezon (°C)", 0.0, 35.0, 10.0, 0.5)
+        max_lai       = st.slider("Maks. LAI (Sentinel-2)", 0.0, 6.0, 1.8, 0.1)
+
+    # ── Compute ───────────────────────────────────────────────────────────
+    if crop not in moisture_profiles:
+        st.error(f"{crop} için nem profili bulunamadı.")
+        st.stop()
+
+    p   = moisture_profiles[crop]
+    idx = min(season_day, p["max_day"])
+
+    target_sm   = p["optimal_sm"][idx]
+    low_sm      = p["low_sm"][idx]
+    critical_sm = p["critical_sm"][idx]
+    upper_sm    = p["upper_sm"][idx]
+
+    if current_sm < critical_sm:
+        alarm = "KRİTİK"
+    elif current_sm < low_sm:
+        alarm = "SULA"
+    elif current_sm > upper_sm:
+        alarm = "DURDUR"
+    else:
+        alarm = "NORMAL"
+
+    irr_target = target_sm if alarm == "KRİTİK" else low_sm
+    delta_sm   = max(0.0, irr_target - current_sm)
+    field_m2   = field_area_ha * 10_000
+    litre      = delta_sm * field_m2 * root_depth * 1000
+    water_cost = (litre / 1000) * WATER_COST
+
+    if alarm == "KRİTİK":
+        decision = "SULA (zorunlu)"
+    elif alarm == "SULA":
+        decision = "SULA"
+    elif alarm == "DURDUR":
+        decision = "SULAMA DURDUR"
+    else:
+        decision = "BEKLEME"
+
+    # IoT verim tahmini
+    chk = 30 if season_day <= 45 else (60 if season_day <= 75 else 90)
+    feat = pd.DataFrame([{
+        "mean_temp": mean_temp, "total_precip": total_precip,
+        "mean_humidity": mean_humidity, "mean_soil_temp": mean_soil_temp,
+        "mean_soil_moisture": current_sm, "max_lai": max_lai,
+        "season_days": season_day, "latitude": lat, "longitude": lon,
+        "elevation": elev, "year": year, "WAV": 50,
+        "crop_te": CROP_TE.get(crop, 1000.0),
+    }])
+    yield_forecast = max(0.0, float(iot_m[chk].predict(feat)[0]))
+
+    yield_optimal  = p["yield_optimal_kg_ha"]
+    yield_drought  = p["yield_drought_kg_ha"]
+    yield_at_risk  = max(0.0, yield_optimal - yield_drought)
+    price          = CROP_PRICES_IOT.get(crop, 10.0)
+    season_risk_tl = yield_at_risk * field_area_ha * price
+
+    # ── Output ────────────────────────────────────────────────────────────
+    st.divider()
+
+    # Alarm banner
+    alarm_colors = {"KRİTİK": "error", "SULA": "warning", "DURDUR": "warning", "NORMAL": "success"}
+    getattr(st, alarm_colors[alarm])(f"**{alarm}** — {decision}")
+
+    # Metrics row 1: nem
+    st.subheader("Toprak Nemi")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Mevcut nem",  f"{current_sm:.3f} m³/m³")
+    c2.metric("Hedef nem",   f"{irr_target:.3f} m³/m³", delta=f"{irr_target - current_sm:+.3f}")
+    c3.metric("Kritik eşik", f"{critical_sm:.3f} m³/m³")
+    c4.metric("Üst sınır",   f"{upper_sm:.3f} m³/m³")
+
+    # Metrics row 2: sulama
+    st.subheader("Sulama")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Gerekli su",   f"{litre:,.0f} litre")
+    c2.metric("Su maliyeti",  f"{water_cost:,.2f} TL")
+    c3.metric("Model checkpoint", f"Gün {chk}")
+
+    # Metrics row 3: verim
+    st.subheader("Verim Tahmini")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("IoT tahmini",      f"{yield_forecast:,.0f} kg/ha")
+    c2.metric("Tarihi optimum",   f"{yield_optimal:,.0f} kg/ha", help="Üst %25 sezonlar medyanı")
+    c3.metric("Tarihi kurak",     f"{yield_drought:,.0f} kg/ha", help="Alt %25 sezonlar medyanı")
+    c4.metric("Sezonluk risk",    f"{season_risk_tl:,.0f} TL",  help="Kuraklık olursa toplam kayıp (bilgi amaçlı)")
+
+    # Nem profil grafiği
+    st.divider()
+    st.subheader("Sezon Nem Profili")
+    days = list(range(min(season_day + 60, p["max_day"] + 1)))
+    opt_line  = [p["optimal_sm"][d] for d in days]
+    low_line  = [p["low_sm"][d] for d in days]
+    high_line = [p["high_sm"][d] for d in days]
+    crit_line = [p["critical_sm"][d] for d in days]
+    up_line   = [p["upper_sm"][d] for d in days]
+
+    fig, ax = plt.subplots(figsize=(11, 4))
+    ax.fill_between(days, low_line, high_line, alpha=0.15, color="steelblue", label="Optimum aralık")
+    ax.plot(days, opt_line,  color="steelblue", lw=2,   label="Optimal hedef")
+    ax.plot(days, crit_line, color="red",    lw=1.2, ls="--", label="Kritik alt sınır")
+    ax.plot(days, up_line,   color="orange", lw=1.2, ls=":",  label="Üst sınır")
+    ax.axvline(season_day, color="black", lw=1.5, ls="-", label=f"Bugün (gün {season_day})")
+    ax.axhline(current_sm, color="purple", lw=1.2, ls="-.", label=f"Mevcut nem ({current_sm:.3f})")
+    alarm_c = {"KRİTİK": "red", "SULA": "orange", "DURDUR": "orange", "NORMAL": "green"}[alarm]
+    ax.scatter([season_day], [current_sm], color=alarm_c, s=120, zorder=5)
+    ax.set_xlabel("Gün (ekim sonrası)")
+    ax.set_ylabel("Toprak nemi (m³/m³)")
+    ax.set_title(f"{crop.capitalize()} — Günlük Nem Profili")
+    ax.legend(fontsize=8, loc="upper right")
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close()
+
+    # Aktüatör komutu
+    st.divider()
+    st.subheader("Aktüatör Komutu (MQTT Payload)")
+    flow_rate = st.number_input("Pompa debisi (litre/dakika)", 100, 5000, 500, 100)
+    duration  = litre / flow_rate if flow_rate > 0 else 0
+    cmd = {
+        "action":       "OPEN" if decision.startswith("SULA") else ("CLOSE" if alarm == "DURDUR" else "IDLE"),
+        "duration_min": round(duration, 1),
+        "litre":        round(litre, 0),
+        "alarm":        alarm,
+        "crop":         crop,
+        "season_day":   season_day,
+        "field_ha":     field_area_ha,
+    }
+    st.json(cmd)
