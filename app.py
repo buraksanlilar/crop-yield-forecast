@@ -531,12 +531,12 @@ elif page == "IoT Decision Engine":
     c3.metric("Model checkpoint", f"Gün {chk}")
 
     # Metrics row 3: verim
-    st.subheader("Verim Tahmini")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("IoT tahmini",      f"{yield_forecast:,.0f} kg/ha")
-    c2.metric("Tarihi optimum",   f"{yield_optimal:,.0f} kg/ha", help="Üst %25 sezonlar medyanı")
-    c3.metric("Tarihi kurak",     f"{yield_drought:,.0f} kg/ha", help="Alt %25 sezonlar medyanı")
-    c4.metric("Sezonluk risk",    f"{season_risk_tl:,.0f} TL",  help="Kuraklık olursa toplam kayıp (bilgi amaçlı)")
+    st.subheader("Verim Referansı (Tarihi)")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Optimum sezon",  f"{yield_optimal:,.0f} kg/ha", help="Üst %25 verimli sezonlar medyanı")
+    c2.metric("Kurak sezon",    f"{yield_drought:,.0f} kg/ha", help="Alt %25 verimli sezonlar medyanı")
+    c3.metric("Sezonluk risk",  f"{season_risk_tl:,.0f} TL",  help="Kuraklık olursa tahmini kayıp")
+    st.caption("Verim referansları, bu bitki için Türkiye genelinde geçmiş sezonlardan hesaplanmıştır. Sulama kararı nem profiline dayanmaktadır.")
 
     # Nem profil grafiği
     st.divider()
