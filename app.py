@@ -26,13 +26,16 @@ FEATURE_COLS = [
 @st.cache_resource
 def load_models():
     return {
-        "yield_full":   joblib.load(MODELS / "baseline_lgbm_fullseason.joblib"),
-        "yield_day30":  joblib.load(MODELS / "early_lgbm_day30.joblib"),
-        "yield_day60":  joblib.load(MODELS / "early_lgbm_day60.joblib"),
-        "yield_day90":  joblib.load(MODELS / "early_lgbm_day90.joblib"),
-        "success_day30": joblib.load(MODELS / "sim_success_lgbm_day30.joblib"),
-        "success_day60": joblib.load(MODELS / "sim_success_lgbm_day60.joblib"),
-        "success_day90": joblib.load(MODELS / "sim_success_lgbm_day90.joblib"),
+        "yield_full":    joblib.load(MODELS / "baseline"         / "baseline_lgbm_fullseason.joblib"),
+        "yield_day30":   joblib.load(MODELS / "early_prediction" / "early_lgbm_day30.joblib"),
+        "yield_day60":   joblib.load(MODELS / "early_prediction" / "early_lgbm_day60.joblib"),
+        "yield_day90":   joblib.load(MODELS / "early_prediction" / "early_lgbm_day90.joblib"),
+        "success_day30": joblib.load(MODELS / "sim_success"      / "sim_success_lgbm_day30.joblib"),
+        "success_day60": joblib.load(MODELS / "sim_success"      / "sim_success_lgbm_day60.joblib"),
+        "success_day90": joblib.load(MODELS / "sim_success"      / "sim_success_lgbm_day90.joblib"),
+        "iot_day30":     joblib.load(MODELS / "iot"              / "iot_lgbm_day30.joblib"),
+        "iot_day60":     joblib.load(MODELS / "iot"              / "iot_lgbm_day60.joblib"),
+        "iot_day90":     joblib.load(MODELS / "iot"              / "iot_lgbm_day90.joblib"),
     }
 
 @st.cache_data
@@ -51,11 +54,11 @@ def load_crop_te():
 
 @st.cache_data
 def load_climate():
-    return pd.read_parquet(OUTPUTS / "climate_change_simulation.parquet")
+    return pd.read_parquet(OUTPUTS / "predictions" / "climate_change_simulation.parquet")
 
 @st.cache_data
 def load_recommendations():
-    return pd.read_parquet(OUTPUTS / "crop_recommendations.parquet")
+    return pd.read_parquet(OUTPUTS / "predictions" / "crop_recommendations.parquet")
 
 # ── App layout ─────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Crop Yield Forecast", layout="wide")

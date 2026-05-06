@@ -1,0 +1,7 @@
+{
+  "delta_temp_c": 2.0,
+  "mean_yield_change_pct": 76.8,
+  "median_yield_change_pct": 1.96,
+  "most_affected_crop": "chickpea",
+  "least_affected_crop": "rapeseed"
+}
